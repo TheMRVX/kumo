@@ -16,9 +16,12 @@ class KumoInvariantsTest {
 
     @Test
     fun test_languageCodes() {
-        assertEquals("", Language.AUTO.code)
+        assertEquals("auto", Language.AUTO.code)
+        assertEquals("", Language.AUTO.languageTag)
         assertEquals("en", Language.ENGLISH.code)
+        assertEquals("en", Language.ENGLISH.languageTag)
         assertEquals("fa", Language.PERSIAN.code)
+        assertEquals("fa", Language.PERSIAN.languageTag)
     }
 
     @Test
