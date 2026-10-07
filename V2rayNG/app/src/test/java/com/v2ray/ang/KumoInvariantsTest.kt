@@ -26,7 +26,7 @@ class KumoInvariantsTest {
 
     @Test
     fun test_appPackageInvariant() {
-        assertTrue(AppConfig.ANG_PACKAGE == "com.v2ray.ang" || AppConfig.ANG_PACKAGE == "com.v2ray.ang.fdroid")
+        assertTrue(AppConfig.ANG_PACKAGE == "com.themrvx.kumo" || AppConfig.ANG_PACKAGE == "com.themrvx.kumo.fdroid")
     }
 
     @Test
