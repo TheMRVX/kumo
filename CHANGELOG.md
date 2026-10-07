@@ -41,6 +41,16 @@ git merge upstream/master
 - **Upstream Repository:** `2dust/v2rayNG`
 - **Baseline Commit:** `6fe3893bfd37865dc677111fa48aef14c0a41efd` (v2.3.10+)
 
+### Added
+- **Modern KUMO UI Shell (`ui/kumo`):** Brand-new, consumer-focused user interface adhering to Apple Human Interface Guidelines (HIG) and inspired by the Akatsuki Cloud aesthetic.
+- **Akatsuki Cloud Interactive Toggle:** Central hero connection button (`AkatsukiCloudButton`) with 3 animated states (Disconnected, Breathing pulse connecting, and Crimson awakened connected).
+- **No-Ripple Apple Press Feedback:** Reusable `appleClickable` modifier with physical spring scale (0.97f) and dimming, eliminating Material ink ripples.
+- **Telemetry Capsule:** Inset Grouped pill showing real-time ping latency with dynamic color indicators and traffic speed metrics.
+- **Server Selection Bottom Sheet:** Streamlined location picker with Smart Connect (fastest server) and ping test capabilities, without geek-level configuration or deletion clutter.
+- **Account & Essential Controls Sheet:** Re-architected subscription management into a simple "My Account" onboarding card, alongside 3 essential consumer toggles (Bypass Iran, Split Tunneling, Auto Connect).
+- **New App Launcher Icon:** Replaced launcher and round launcher mipmap icons with the official KUMO Akatsuki Cloud emblem.
+- **Primary Entry Point:** Configured `KumoMainActivity` as the sole launcher activity in `AndroidManifest.xml`, leaving legacy `MainActivity` dormant for upstream reference.
+
 ### Changed
 - **Rebranding:** Renamed application name to `KUMO VPN` across English (`values/strings.xml`) and Persian (`values-fa/strings.xml`) string resources.
 - **Gradle Resource Filtering:** Restricted `androidResources.localeFilters` in `V2rayNG/app/build.gradle.kts` to only `en` and `fa`.

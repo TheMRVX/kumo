@@ -559,4 +559,26 @@
     <string name="connection_test_empty_message">جزئیاتی در دسترس نیست</string>
     <string name="value_unknown">ناشناخته</string>
 
+    <!-- KUMO VPN Strings -->
+    <string name="kumo_tap_to_connect">برای اتصال لمس کنید</string>
+    <string name="kumo_connecting">در حال برقراری ارتباط…</string>
+    <string name="kumo_connected">متصل شد</string>
+    <string name="kumo_disconnected">قطع شد</string>
+    <string name="kumo_smart_connect">اتصال هوشمند (سریع‌ترین)</string>
+    <string name="kumo_select_server">انتخاب سرور</string>
+    <string name="kumo_ping_all">تست پینگ همه سرورها</string>
+    <string name="kumo_account_settings">حساب کاربری و تنظیمات</string>
+    <string name="kumo_my_account">حساب کاربری من</string>
+    <string name="kumo_subscription_input_hint">شناسه اشتراک یا لینک خود را وارد کنید</string>
+    <string name="kumo_update_subscription">بروزرسانی سرورها</string>
+    <string name="kumo_bypass_iran">دور زدن سایت‌های ایرانی</string>
+    <string name="kumo_bypass_iran_summary">باز شدن مستقیم سایت‌های داخلی بدون فیلترشکن</string>
+    <string name="kumo_split_tunneling">تفکیک برنامه‌ها</string>
+    <string name="kumo_split_tunneling_summary">انتخاب برنامه‌های عبوری از فیلترشکن</string>
+    <string name="kumo_auto_connect">اتصال خودکار</string>
+    <string name="kumo_auto_connect_summary">روشن شدن خودکار با باز شدن برنامه</string>
+    <string name="kumo_active_profile">اشتراک فعال</string>
+    <string name="kumo_no_servers">سروری یافت نشد</string>
+    <string name="kumo_paste">جاگذاری</string>
+    <string name="kumo_scan_qr">اسکن بارکد</string>
 </resources>

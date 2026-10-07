@@ -559,4 +559,26 @@
     <string name="connection_test_empty_message">no details available</string>
     <string name="value_unknown">unknown</string>
 
+    <!-- KUMO VPN Strings -->
+    <string name="kumo_tap_to_connect">Tap to connect</string>
+    <string name="kumo_connecting">Securing connection…</string>
+    <string name="kumo_connected">Connected</string>
+    <string name="kumo_disconnected">Disconnected</string>
+    <string name="kumo_smart_connect">Smart Connect (Fastest)</string>
+    <string name="kumo_select_server">Select Location</string>
+    <string name="kumo_ping_all">Test All</string>
+    <string name="kumo_account_settings">Account &amp; Settings</string>
+    <string name="kumo_my_account">My Account</string>
+    <string name="kumo_subscription_input_hint">Enter Subscription ID or URL</string>
+    <string name="kumo_update_subscription">Update Profile</string>
+    <string name="kumo_bypass_iran">Bypass Iranian Sites</string>
+    <string name="kumo_bypass_iran_summary">Direct access for domestic websites</string>
+    <string name="kumo_split_tunneling">App Filtering</string>
+    <string name="kumo_split_tunneling_summary">Choose which apps use the VPN</string>
+    <string name="kumo_auto_connect">Auto Connect</string>
+    <string name="kumo_auto_connect_summary">Connect automatically on app launch</string>
+    <string name="kumo_active_profile">Active Subscription</string>
+    <string name="kumo_no_servers">No servers found</string>
+    <string name="kumo_paste">Paste</string>
+    <string name="kumo_scan_qr">Scan QR</string>
 </resources>
