@@ -101,7 +101,7 @@ class KumoMainActivity : HelperBaseComponentActivity() {
         if (mainViewModel.uiState.value.isRunning) {
             mainViewModel.testCurrentServerRealPing()
         } else {
-            mainViewModel.testCurrentServer()
+            mainViewModel.testAllRealPing(onlyTcp = true)
         }
     }
 

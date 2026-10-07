@@ -294,12 +294,18 @@ jobs:
           \`\`\`
           EOF
 
+          {
+            echo 'body<<EOF'
+            cat release_body.md
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
       - name: Publish Release Assets
         uses: svenstaro/upload-release-action@v2
         with:
           file: release-files/*
           tag: ${{ env.RELEASE_TAG }}
-          release_name: KUMO VPN v${{ env.RELEASE_TAG }}
+          release_name: KUMO VPN v${{ env.KUMO_VERSION }}
           body: ${{ steps.release_notes.outputs.body }}
           file_glob: true
           prerelease: ${{ inputs.prerelease || false }}
