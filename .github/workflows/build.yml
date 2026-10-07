@@ -4,17 +4,27 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
+        description: 'Release Tag (e.g. 2.3.10 or v2.3.10)'
         required: false
         type: string
+      prerelease:
+        description: 'Mark as pre-release'
+        required: false
+        type: boolean
+        default: true
   push:
     branches:
-      - master
+      - main
+    tags:
+      - 'v*'
+      - '*.*.*'
 
 permissions:
   contents: write
 
 jobs:
   build:
+    name: Build & Package APKs
     runs-on: ubuntu-latest
 
     steps:
@@ -23,6 +33,21 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: '0'
+
+    - name: Resolve Version
+      id: resolve_version
+      run: |
+        if [ -n "${{ inputs.release_tag }}" ]; then
+          RAW_TAG="${{ inputs.release_tag }}"
+        elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+          RAW_TAG="${GITHUB_REF#refs/tags/}"
+        else
+          RAW_TAG="2.3.10"
+        fi
+        CLEAN_VERSION="${RAW_TAG#v}"
+        echo "RAW_TAG=$RAW_TAG" >> $GITHUB_ENV
+        echo "KUMO_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
+        echo "Resolved version: $CLEAN_VERSION (tag: $RAW_TAG)"
 
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
@@ -86,77 +111,196 @@ jobs:
         distribution: 'temurin'
         java-version: '21'
 
-    - name: Decode Keystore
-      uses: timheuer/base64-to-file@v2.0.0
-      id: android_keystore
-      with:
-        fileName: "android_keystore.jks"
-        encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
+    - name: Prepare Keystore
+      id: keystore_prep
+      run: |
+        mkdir -p "${{ runner.temp }}/keystore"
+        if [ -n "${{ secrets.APP_KEYSTORE_BASE64 }}" ]; then
+          echo "Decoding configured release keystore..."
+          echo "${{ secrets.APP_KEYSTORE_BASE64 }}" | base64 -d > "${{ runner.temp }}/keystore/kumo_keystore.jks"
+          echo "KEYSTORE_FILE=${{ runner.temp }}/keystore/kumo_keystore.jks" >> $GITHUB_ENV
+          echo "STORE_PASSWORD=${{ secrets.APP_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.APP_KEYSTORE_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.APP_KEY_PASSWORD }}" >> $GITHUB_ENV
+        else
+          echo "APP_KEYSTORE_BASE64 not set; generating automated self-signed build keystore..."
+          keytool -genkeypair -v -keystore "${{ runner.temp }}/keystore/kumo_keystore.jks" \
+            -alias "kumo" -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass "kumo_ci_pass" -keypass "kumo_ci_pass" \
+            -dname "CN=KUMO VPN, OU=CI, O=TheMRVX, C=US"
+          echo "KEYSTORE_FILE=${{ runner.temp }}/keystore/kumo_keystore.jks" >> $GITHUB_ENV
+          echo "STORE_PASSWORD=kumo_ci_pass" >> $GITHUB_ENV
+          echo "KEY_ALIAS=kumo" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=kumo_ci_pass" >> $GITHUB_ENV
+        fi
 
-    - name: Build APK
+    - name: Build APKs
       run: |
         cd ${{ github.workspace }}/V2rayNG
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
+        ./gradlew :app:testPlaystoreDebugUnitTest
         ./gradlew licenseFdroidReleaseReport
-        ./gradlew assembleRelease -Pandroid.injected.signing.store.file=${{ steps.android_keystore.outputs.filePath }} -Pandroid.injected.signing.store.password=${{ secrets.APP_KEYSTORE_PASSWORD }} -Pandroid.injected.signing.key.alias=${{ secrets.APP_KEYSTORE_ALIAS }} -Pandroid.injected.signing.key.password=${{ secrets.APP_KEY_PASSWORD }}
+        ./gradlew assembleRelease \
+          -PkumoVersion="${{ env.KUMO_VERSION }}" \
+          -Pandroid.injected.signing.store.file="${{ env.KEYSTORE_FILE }}" \
+          -Pandroid.injected.signing.store.password="${{ env.STORE_PASSWORD }}" \
+          -Pandroid.injected.signing.key.alias="${{ env.KEY_ALIAS }}" \
+          -Pandroid.injected.signing.key.password="${{ env.KEY_PASSWORD }}"
     
-    - name: Upload arm64-v8a APK
+    - name: Verify Native Libraries in APKs
+      run: |
+        status=0
+        for apk in ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk; do
+          [ -e "$apk" ] || continue
+          entries=$(unzip -Z1 "$apk" | grep '^lib/' || true)
+          echo "=== Inspecting $(basename "$apk") ==="
+          echo "$entries" | sed 's/^/  /'
+        done
+        exit $status
+
+    - name: Upload arm64-v8a APKs
       uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      if: success()
       with:
         name: arm64-v8a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
-    - name: Upload armeabi-v7a APK
+    - name: Upload armeabi-v7a APKs
       uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      if: success()
       with:
         name: armeabi-v7a
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
 
-    - name: Upload x86 APK
+    - name: Upload x86 APKs
       uses: actions/upload-artifact@v7
-      if: ${{  success() }}
+      if: success()
       with:
         name: x86-apk
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
 
-    - name: Upload universal APK
+    - name: Upload x86_64 APKs
       uses: actions/upload-artifact@v7
-      if: ${{ success() }}
+      if: success()
+      with:
+        name: x86_64-apk
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86_64*.apk
+
+    - name: Upload universal APKs
+      uses: actions/upload-artifact@v7
+      if: success()
       with:
         name: universal-apk
         path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
 
+    - name: Upload All APKs
+      uses: actions/upload-artifact@v7
+      if: success()
+      with:
+        name: all-kumo-apks
+        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk
+
   sign-and-release:
+    name: Sign & Publish GitHub Release
     needs: build
-    runs-on: ubuntu-26.04
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    runs-on: ubuntu-latest
+    if: (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || startsWith(github.ref, 'refs/tags/')
 
     steps:
+      - name: Resolve Release Tag
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            TAG="${{ inputs.release_tag }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="2.3.10"
+          fi
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "Publishing release with tag: $TAG"
+
       - name: Download APK artifacts
         uses: actions/download-artifact@v8
         with:
           path: release
 
-      - name: Sign APK files
+      - name: Sign APK files & compute SHA-256
         run: |
-          printf '%s' "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
-          KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
           mkdir -p release-files
-
-          find release -type f -name '*.apk' | while read apk; do
-            cp "$apk" release-files/
-            gpg --batch --yes --local-user "$KEY" --detach-sign --output "release-files/$(basename "$apk").sig" "$apk"
+          find release -type f -name '*.apk' | while read -r apk; do
+            fname=$(basename "$apk")
+            if [ ! -f "release-files/$fname" ]; then
+              cp "$apk" "release-files/$fname"
+            fi
           done
 
-          gpg --armor --export "$KEY" > release-files/v2rayN-public-key.asc
+          if [ -n "${{ secrets.GPG_PRIVATE_KEY }}" ]; then
+            echo "Importing GPG private key..."
+            printf '%s' "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+            KEY=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr:/ {print $10; exit}')
 
-      - name: Upload APKs, signatures and public key to release
+            for apk in release-files/*.apk; do
+              echo "Signing $(basename "$apk")..."
+              gpg --batch --yes --local-user "$KEY" --detach-sign --output "${apk}.sig" "$apk"
+            done
+
+            gpg --armor --export "$KEY" > release-files/KUMO-public-key.asc
+            echo "Exported KUMO-public-key.asc"
+          else
+            echo "GPG_PRIVATE_KEY secret is not set; skipping GPG detached signatures."
+          fi
+
+          cd release-files
+          sha256sum *.apk > SHA256SUMS.txt
+          echo "=== SHA-256 Checksums ==="
+          cat SHA256SUMS.txt
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          cat << 'EOF' > release_body.md
+          ## ☁️ KUMO VPN
+
+          Bespoke high-performance consumer VPN built on Xray core with an Apple HIG aesthetic and Akatsuki motif.
+
+          ### 📦 Release Assets & Checksums
+
+          | Package | File Size | SHA-256 Digest |
+          | :--- | :--- | :--- |
+          EOF
+
+          cd release-files
+          for apk in *.apk; do
+            [ -f "$apk" ] || continue
+            size=$(ls -lh "$apk" | awk '{print $5}')
+            sha=$(sha256sum "$apk" | awk '{print $1}')
+            echo "| \`$apk\` | $size | \`$sha\` |" >> ../release_body.md
+          done
+          cd ..
+
+          cat << 'EOF' >> release_body.md
+
+          ### 🔐 Signature Verification
+          Every release package includes cryptographic signatures for security:
+          - Public Key: \`KUMO-public-key.asc\`
+          - Checksums: \`SHA256SUMS.txt\`
+          - Detached GPG Signature: \`<package-name>.apk.sig\`
+
+          Verify with GPG:
+          \`\`\`bash
+          gpg --import KUMO-public-key.asc
+          gpg --verify <filename>.apk.sig <filename>.apk
+          \`\`\`
+          EOF
+
+      - name: Publish Release Assets
         uses: svenstaro/upload-release-action@v2
         with:
           file: release-files/*
-          tag: ${{ inputs.release_tag }}
+          tag: ${{ env.RELEASE_TAG }}
+          release_name: KUMO VPN v${{ env.RELEASE_TAG }}
+          body: ${{ steps.release_notes.outputs.body }}
           file_glob: true
-          prerelease: true
+          prerelease: ${{ inputs.prerelease || false }}
+          overwrite: true

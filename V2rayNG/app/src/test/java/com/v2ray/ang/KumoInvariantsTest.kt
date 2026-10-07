@@ -1,0 +1,33 @@
+package com.v2ray.ang
+
+import com.v2ray.ang.enums.Language
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.Test
+
+class KumoInvariantsTest {
+
+    @Test
+    fun test_languageEnumInvariant() {
+        val supportedLanguages = Language.entries.map { it.name }
+        assertEquals(listOf("AUTO", "ENGLISH", "PERSIAN"), supportedLanguages)
+        assertEquals(3, Language.entries.size)
+    }
+
+    @Test
+    fun test_languageCodes() {
+        assertEquals("", Language.AUTO.code)
+        assertEquals("en", Language.ENGLISH.code)
+        assertEquals("fa", Language.PERSIAN.code)
+    }
+
+    @Test
+    fun test_appPackageInvariant() {
+        assertEquals("com.v2ray.ang", AppConfig.ANG_PACKAGE)
+    }
+
+    @Test
+    fun test_assetsDirectoryInvariant() {
+        assertEquals("assets", AppConfig.DIR_ASSETS)
+    }
+}

@@ -50,6 +50,9 @@ git merge upstream/master
 - **Account & Essential Controls Sheet:** Re-architected subscription management into a simple "My Account" onboarding card, alongside 3 essential consumer toggles (Bypass Iran, Split Tunneling, Auto Connect).
 - **New App Launcher Icon:** Replaced launcher and round launcher mipmap icons with the official KUMO Akatsuki Cloud emblem.
 - **Primary Entry Point:** Configured `KumoMainActivity` as the sole launcher activity in `AndroidManifest.xml`, leaving legacy `MainActivity` dormant for upstream reference.
+- **Automated CI/CD Pipelines (`build.yml` & `ci.yml`):** Implemented automated build, signing, and release pipeline matching PattNG specifications (all 10 APK variants across 5 ABIs and 2 distributions, detached `.sig` GPG signatures, `KUMO-public-key.asc`, and `SHA256SUMS.txt`). Added CI quality gate workflow validating invariants, JVM unit tests, Kotlin compilation, and debug assembly.
+- **Invariant & Integrity Verification:** Added automated script (`.github/scripts/verify_invariants.py`) and Kotlin unit test (`KumoInvariantsTest.kt`) enforcing strict 2-language parity, dormant UI state, and package invariants.
+- **Dynamic Versioning & APK Naming:** Updated `build.gradle.kts` to output `KUMO_<version>-fdroid_<abi>.apk` and `KUMO_<version>_<abi>.apk` with `-PkumoVersion` build property support.
 
 ### Changed
 - **Rebranding:** Renamed application name to `KUMO VPN` across English (`values/strings.xml`) and Persian (`values-fa/strings.xml`) string resources.
