@@ -13,8 +13,8 @@ android {
         applicationId = "com.themrvx.kumo"
         minSdk = 24
         targetSdk = 37
-        versionCode = 750
-        versionName = (project.findProperty("kumoVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.3.10"
+        versionCode = 751
+        versionName = (project.findProperty("kumoVersion") as? String)?.takeIf { it.isNotBlank() } ?: "2.3.11"
 
         val abiFilterList = (properties["ABI_FILTERS"] as? String)?.split(';')
         splits {
