@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">v2rayNG</string>
+    <string name="app_name" translatable="false">KUMO VPN</string>
     <string name="app_widget_name">Switch</string>
     <string name="app_tile_name">Switch</string>
     <string name="app_tile_first_use">Add a profile in the app before using this feature.</string>
@@ -290,7 +290,6 @@
     <string name="title_about">About</string>
     <string name="title_source_code">Source code</string>
     <string name="title_oss_license">Open-source licenses</string>
-    <string name="title_translators">Translators</string>
     <string name="title_tg_channel">Telegram channel</string>
 
     <string name="title_pref_promotion">Promotion</string>
@@ -494,7 +493,6 @@
     <string name="routing_preset_china_blacklist">China Blacklist</string>
     <string name="routing_preset_global">Global</string>
     <string name="routing_preset_iran_whitelist">Iran Whitelist</string>
-    <string name="routing_preset_russia_whitelist">Russia Whitelist</string>
 
     <string-array name="vpn_bypass_lan">
         <item>Follow config</item>

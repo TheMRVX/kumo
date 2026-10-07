@@ -81,8 +81,7 @@ private enum class RoutingPreset(val type: RoutingType, @StringRes val labelRes:
     ChinaWhitelist(RoutingType.WHITE, R.string.routing_preset_china_whitelist),
     ChinaBlacklist(RoutingType.BLACK, R.string.routing_preset_china_blacklist),
     Global(RoutingType.GLOBAL, R.string.routing_preset_global),
-    IranWhitelist(RoutingType.WHITE_IRAN, R.string.routing_preset_iran_whitelist),
-    RussiaWhitelist(RoutingType.WHITE_RUSSIA, R.string.routing_preset_russia_whitelist)
+    IranWhitelist(RoutingType.WHITE_IRAN, R.string.routing_preset_iran_whitelist)
 }
 
 class RoutingSettingActivity : HelperBaseComponentActivity() {
