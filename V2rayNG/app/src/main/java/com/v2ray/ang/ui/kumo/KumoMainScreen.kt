@@ -55,7 +55,10 @@ fun KumoMainScreen(
 ) {
     val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
     val isRunning = uiState.isRunning
-    val servers = uiState.servers
+    val serversFlow = remember(uiState.selectedGroupId, mainViewModel) {
+        mainViewModel.serversForGroup(uiState.selectedGroupId)
+    }
+    val servers by serversFlow.collectAsStateWithLifecycle()
     val selectedGuid = uiState.selectedGuid
 
     val activeServer = servers.find { it.guid == selectedGuid } ?: servers.firstOrNull()

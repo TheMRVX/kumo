@@ -83,7 +83,7 @@ class KumoMainActivity : HelperBaseComponentActivity() {
         val currentGuid = mainViewModel.uiState.value.selectedGuid
         if (currentGuid.isNullOrEmpty()) {
             // Auto-select first server if none selected
-            val firstServer = mainViewModel.uiState.value.servers.firstOrNull()
+            val firstServer = mainViewModel.serversForGroup(mainViewModel.uiState.value.selectedGroupId).value.firstOrNull()
             if (firstServer != null) {
                 setSelectServer(firstServer.guid)
             } else {
