@@ -7,7 +7,14 @@ import android.view.KeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import com.v2ray.ang.AngApplication
 import com.v2ray.ang.R
 import com.v2ray.ang.core.LauncherManager
@@ -15,6 +22,9 @@ import com.v2ray.ang.enums.PermissionType
 import com.v2ray.ang.extension.toast
 import com.v2ray.ang.handler.SettingsManager
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
+import com.v2ray.ang.ui.kumo.components.KumoSplashScreen
+import com.v2ray.ang.ui.kumo.components.KumoToastManager
+import com.v2ray.ang.ui.kumo.components.ToastType
 import com.v2ray.ang.ui.kumo.theme.KumoTheme
 import com.v2ray.ang.ui.main.MainAction
 import com.v2ray.ang.ui.main.MainRepository
@@ -43,11 +53,11 @@ class KumoMainActivity : HelperBaseComponentActivity() {
         BackHandler { moveTaskToBack(false) }
 
         KumoTheme {
-            var isSplashFinished by androidx.compose.runtime.saveable.rememberSaveable {
-                androidx.compose.runtime.mutableStateOf(false)
+            var isSplashFinished by rememberSaveable {
+                mutableStateOf(false)
             }
 
-            androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize()) {
                 KumoMainScreen(
                     mainViewModel = mainViewModel,
                     onAction = { action ->
@@ -62,7 +72,7 @@ class KumoMainActivity : HelperBaseComponentActivity() {
                 )
 
                 if (!isSplashFinished) {
-                    com.v2ray.ang.ui.kumo.components.KumoSplashScreen(
+                    KumoSplashScreen(
                         onFinished = { isSplashFinished = true }
                     )
                 }
@@ -99,9 +109,9 @@ class KumoMainActivity : HelperBaseComponentActivity() {
             if (firstServer != null) {
                 setSelectServer(firstServer.guid)
             } else {
-                com.v2ray.ang.ui.kumo.components.KumoToastManager.show(
+                KumoToastManager.show(
                     getString(R.string.kumo_no_server_selected),
-                    com.v2ray.ang.ui.kumo.components.ToastType.WARNING
+                    ToastType.WARNING
                 )
                 return
             }
