@@ -28,6 +28,7 @@ fun KumoTheme(
 ) {
     MaterialTheme(
         colorScheme = KumoDarkColorScheme,
+        typography = KumoTypography,
         content = content
     )
 }

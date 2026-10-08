@@ -581,4 +581,16 @@
     <string name="kumo_no_servers">سروری یافت نشد</string>
     <string name="kumo_paste">جاگذاری</string>
     <string name="kumo_scan_qr">اسکن بارکد</string>
+    <string name="kumo_onboarding_title">شروع اتصال</string>
+    <string name="kumo_onboarding_desc">برای شروع، لینک اشتراک خود را وارد کرده یا کانفیگ را جاگذاری کنید</string>
+    <string name="kumo_add_subscription">افزودن اشتراک</string>
+    <string name="kumo_save_and_fetch">ذخیره و دریافت سرورها</string>
+    <string name="kumo_paste_from_clipboard">جاگذاری از حافظه</string>
+    <string name="kumo_subscription_saved">لینک اشتراک با موفقیت ذخیره شد</string>
+    <string name="kumo_clipboard_empty_or_invalid">لینکی در حافظه موقت یافت نشد</string>
+    <string name="kumo_no_server_selected">لطفاً ابتدا یک سرور را انتخاب کنید</string>
+    <string name="kumo_scan_qr_desc">دوربین را در مقابل بارکد قرار دهید</string>
+    <string name="kumo_language">زبان</string>
+    <string name="kumo_lang_persian">فا</string>
+    <string name="kumo_lang_english">EN</string>
 </resources>

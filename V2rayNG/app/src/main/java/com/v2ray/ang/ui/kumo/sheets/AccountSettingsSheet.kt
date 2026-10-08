@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -54,9 +55,13 @@ import androidx.compose.ui.unit.sp
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.R
+import com.v2ray.ang.enums.Language
 import com.v2ray.ang.enums.RoutingType
+import com.v2ray.ang.handler.AppLocaleManager
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.ui.kumo.components.KumoToastManager
+import com.v2ray.ang.ui.kumo.components.ToastType
 import com.v2ray.ang.ui.kumo.modifiers.appleClickable
 import com.v2ray.ang.ui.kumo.modifiers.kumoCard
 import com.v2ray.ang.ui.kumo.theme.KumoColor
@@ -183,6 +188,37 @@ fun AccountSettingsSheet(
                     )
                 )
 
+                if (inputToken.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .kumoCard(
+                                shape = RoundedCornerShape(12.dp),
+                                backgroundColor = KumoColor.AkatsukiRedVibrant
+                            )
+                            .appleClickable {
+                                onImportConfig(inputToken.trim())
+                                onUpdateSubscriptions()
+                                onDismissRequest()
+                                KumoToastManager.show(
+                                    context.getString(R.string.kumo_subscription_saved),
+                                    ToastType.SUCCESS
+                                )
+                            }
+                            .padding(vertical = 12.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.kumo_save_and_fetch),
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(12.dp))
 
                 // Action Buttons: Paste & QR
@@ -201,11 +237,26 @@ fun AccountSettingsSheet(
                             .appleClickable {
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                                 if (clipboard != null && clipboard.hasPrimaryClip()) {
-                                    val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString().orEmpty()
+                                    val text = clipboard.primaryClip?.getItemAt(0)?.text?.toString().orEmpty().trim()
                                     if (text.isNotBlank()) {
                                         onImportConfig(text)
+                                        onUpdateSubscriptions()
                                         onDismissRequest()
+                                        KumoToastManager.show(
+                                            context.getString(R.string.kumo_subscription_saved),
+                                            ToastType.SUCCESS
+                                        )
+                                    } else {
+                                        KumoToastManager.show(
+                                            context.getString(R.string.kumo_clipboard_empty_or_invalid),
+                                            ToastType.WARNING
+                                        )
                                     }
+                                } else {
+                                    KumoToastManager.show(
+                                        context.getString(R.string.kumo_clipboard_empty_or_invalid),
+                                        ToastType.WARNING
+                                    )
                                 }
                             }
                             .padding(vertical = 10.dp),
@@ -343,6 +394,61 @@ fun AccountSettingsSheet(
                         MmkvManager.encodeSettings(AppConfig.PREF_IS_BOOTED, checked)
                     }
                 )
+
+                HorizontalDivider(
+                    thickness = 0.5.dp,
+                    color = KumoColor.WhiteHairlineSubtle,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                // 4. Language Selector
+                val currentLang = MmkvManager.decodeSettingsString(AppConfig.PREF_LANGUAGE) ?: Language.AUTO.code
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .appleClickable {
+                            val target = if (currentLang == "fa") "en" else "fa"
+                            AppLocaleManager.setApplicationLanguage(target)
+                        }
+                        .padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Translate,
+                        contentDescription = null,
+                        tint = KumoColor.AkatsukiRedVibrant,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(14.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.kumo_language),
+                            color = KumoColor.TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = if (currentLang == "fa") "فارسی" else if (currentLang == "en") "English" else stringResource(R.string.auto),
+                            color = KumoColor.TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .kumoCard(
+                                shape = RoundedCornerShape(8.dp),
+                                backgroundColor = KumoColor.ElevatedSurface
+                            )
+                            .padding(horizontal = 10.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = if (currentLang == "fa") "فا" else "EN",
+                            color = KumoColor.AkatsukiRedVibrant,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))

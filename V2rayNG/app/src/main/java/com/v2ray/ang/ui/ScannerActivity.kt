@@ -69,6 +69,30 @@ import com.v2ray.ang.ui.base.HelperBaseComponentActivity
 import com.v2ray.ang.ui.compose.AppTopBar
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.QRCodeDecoder
+import com.v2ray.ang.ui.kumo.theme.KumoTheme
+import com.v2ray.ang.ui.kumo.theme.KumoColor
+import com.v2ray.ang.ui.kumo.theme.kumoCard
+import com.v2ray.ang.ui.kumo.theme.appleClickable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.material3.Surface
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.Arrangement
 import java.nio.ByteBuffer
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -87,14 +111,16 @@ class ScannerActivity : HelperBaseComponentActivity() {
 
     @Composable
     override fun ScreenContent() {
-        ScannerScreen(
-            uiState = uiState.value,
-            onBackClick = { finish() },
-            onSelectPhoto = { showFileChooser() },
-            onStartScan = { startScan() },
-            onStopScan = { stopScan() },
-            onScanResult = { text -> finished(text) }
-        )
+        KumoTheme {
+            ScannerScreen(
+                uiState = uiState.value,
+                onBackClick = { finish() },
+                onSelectPhoto = { showFileChooser() },
+                onStartScan = { startScan() },
+                onStopScan = { stopScan() },
+                onScanResult = { text -> finished(text) }
+            )
+        }
     }
 
     private fun startScan() {
@@ -154,84 +180,183 @@ fun ScannerScreen(
     var hasTorch by remember { mutableStateOf(false) }
     var torchEnabled by rememberSaveable { mutableStateOf(false) }
 
-    Scaffold(
-        contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
-        topBar = {
-            AppTopBar(
-                title = stringResource(R.string.menu_item_import_config_qrcode),
-                onBackClick = onBackClick,
-                actions = {
-                    IconButton(
-                        onClick = {
-                            if (isScanning) {
-                                if (torchEnabled) {
-                                    torchEnabled = false
-                                    cameraControl?.enableTorch(false)
-                                }
-                                onStopScan()
-                            } else {
-                                onStartScan()
-                            }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(KumoColor.PureBlack)
+    ) {
+        // Camera View or Idle state
+        when (uiState) {
+            ScannerUiState.IDLE -> {
+                ScannerIdlePlaceholder(onStartClick = onStartScan)
+            }
+            ScannerUiState.ACTIVE -> {
+                CameraXPreview(
+                    onScanResult = onScanResult,
+                    onCameraReady = { control, info ->
+                        cameraControl = control
+                        hasTorch = info.hasFlashUnit()
+                        if (torchEnabled && hasTorch) {
+                            control.enableTorch(true)
                         }
-                    ) {
-                        Icon(
-                            painterResource(
-                                if (isScanning) R.drawable.ic_stop_24dp
-                                else R.drawable.ic_scan_24dp
-                            ),
-                            contentDescription = stringResource(
-                                if (isScanning) R.string.acc_stop_scanner else R.string.acc_start_scanner
-                            )
-                        )
                     }
-                    if (isScanning && hasTorch) {
-                        IconButton(
-                            onClick = {
+                )
+                ScannerOverlay()
+            }
+        }
+
+        // Floating Top Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertizontally
+        ) {
+            // Back Button
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(KumoColor.ObsidianGlass)
+                    .border(BorderStroke(1.dp, KumoColor.CardBorder), CircleShape)
+                    .appleClickable { onBackClick() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_arrow_back_24dp),
+                    contentDescription = stringResource(R.string.acc_back),
+                    tint = KumoColor.TextPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // Title Pill
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(KumoColor.ObsidianGlass)
+                    .border(BorderStroke(1.dp, KumoColor.CardBorder), RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.menu_item_import_config_qrcode),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = KumoColor.TextPrimary
+                )
+            }
+
+            // Action Buttons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertizontally
+            ) {
+                if (isScanning && hasTorch) {
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (torchEnabled) KumoColor.AkatsukiRed.copy(alpha = 0.35f)
+                                else KumoColor.ObsidianGlass
+                            )
+                            .border(
+                                BorderStroke(
+                                    1.dp,
+                                    if (torchEnabled) KumoColor.AkatsukiRedVibrant else KumoColor.CardBorder
+                                ),
+                                CircleShape
+                            )
+                            .appleClickable {
                                 torchEnabled = !torchEnabled
                                 cameraControl?.enableTorch(torchEnabled)
-                            }
-                        ) {
-                            Icon(
-                                painterResource(
-                                    if (torchEnabled) R.drawable.ic_flash_on_24dp
-                                    else R.drawable.ic_flash_off_24dp
-                                ),
-                                contentDescription = stringResource(
-                                    if (torchEnabled) R.string.acc_turn_torch_off
-                                    else R.string.acc_turn_torch_on
-                                )
-                            )
-                        }
-                    }
-                    IconButton(onClick = onSelectPhoto) {
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
-                            painterResource(R.drawable.ic_image_24dp),
-                            contentDescription = stringResource(R.string.acc_select_image)
+                            painter = painterResource(
+                                if (torchEnabled) R.drawable.ic_flash_on_24dp
+                                else R.drawable.ic_flash_off_24dp
+                            ),
+                            contentDescription = stringResource(
+                                if (torchEnabled) R.string.acc_turn_torch_off else R.string.acc_turn_torch_on
+                            ),
+                            tint = if (torchEnabled) KumoColor.AkatsukiRedVibrant else KumoColor.TextPrimary,
+                            modifier = Modifier.size(20.dp)
                         )
                     }
                 }
-            )
+
+                // Choose Image Button
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(KumoColor.ObsidianGlass)
+                        .border(BorderStroke(1.dp, KumoColor.CardBorder), CircleShape)
+                        .appleClickable { onSelectPhoto() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_image_24dp),
+                        contentDescription = stringResource(R.string.acc_select_image),
+                        tint = KumoColor.TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
-    ) { innerPadding ->
+
+        // Floating Bottom Controls
         Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(bottom = 28.dp)
         ) {
-            when (uiState) {
-                ScannerUiState.IDLE -> ScannerIdlePlaceholder(onStartClick = onStartScan)
-                ScannerUiState.ACTIVE -> {
-                    CameraXPreview(
-                        onScanResult = onScanResult,
-                        onCameraReady = { control, info ->
-                            cameraControl = control
-                            hasTorch = info.hasFlashUnit()
-                            if (torchEnabled && hasTorch) {
-                                control.enableTorch(true)
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(24.dp))
+                    .background(KumoColor.ObsidianGlass)
+                    .border(BorderStroke(1.dp, KumoColor.CardBorder), RoundedCornerShape(24.dp))
+                    .appleClickable {
+                        if (isScanning) {
+                            if (torchEnabled) {
+                                torchEnabled = false
+                                cameraControl?.enableTorch(false)
                             }
+                            onStopScan()
+                        } else {
+                            onStartScan()
                         }
+                    }
+                    .padding(horizontal = 24.dp, vertical = 12.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertizontally,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(
+                            if (isScanning) R.drawable.ic_stop_24dp
+                            else R.drawable.ic_scan_24dp
+                        ),
+                        contentDescription = null,
+                        tint = if (isScanning) KumoColor.AkatsukiRedVibrant else KumoColor.TextPrimary,
+                        modifier = Modifier.size(20.dp)
                     )
-                    ScannerOverlay()
+                    Text(
+                        text = stringResource(
+                            if (isScanning) R.string.acc_stop_scanner
+                            else R.string.acc_start_scanner
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Medium,
+                        color = KumoColor.TextPrimary
+                    )
                 }
             }
         }
@@ -243,28 +368,41 @@ private fun ScannerIdlePlaceholder(onStartClick: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.surface)
+            .background(KumoColor.PureBlack)
             .pointerInput(Unit) { detectTapGestures { onStartClick() } },
         contentAlignment = Alignment.Center
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                painter = painterResource(R.drawable.ic_scan_24dp),
-                contentDescription = stringResource(R.string.acc_start_scanner),
-                modifier = Modifier.size(80.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .clip(CircleShape)
+                    .background(KumoColor.AkatsukiRed.copy(alpha = 0.12f))
+                    .border(BorderStroke(1.dp, KumoColor.AkatsukiRed.copy(alpha = 0.3f)), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_scan_24dp),
+                    contentDescription = stringResource(R.string.acc_start_scanner),
+                    modifier = Modifier.size(44.dp),
+                    tint = KumoColor.AkatsukiRedVibrant
+                )
+            }
+            Spacer(modifier = Modifier.height(20.dp))
             Text(
                 text = stringResource(R.string.menu_item_scan_qrcode),
                 style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface
+                fontWeight = FontWeight.Bold,
+                color = KumoColor.TextPrimary
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = stringResource(R.string.summary_scan_qrcode),
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                color = KumoColor.TextSecondary
             )
         }
     }
@@ -273,9 +411,20 @@ private fun ScannerIdlePlaceholder(onStartClick: () -> Unit) {
 @Composable
 fun ScannerOverlay() {
     val scanBoxSize = 250.dp
-    val cornerLength = 24.dp
-    val cornerWidth = 3.dp
-    val cornerColor = Color(0xFF4CAF50)
+    val cornerLength = 26.dp
+    val cornerWidth = 4.dp
+    val cornerColor = KumoColor.AkatsukiRedVibrant
+
+    val infiniteTransition = rememberInfiniteTransition(label = "scanner_laser")
+    val laserProgress by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "laser_pos"
+    )
 
     Box(modifier = Modifier.fillMaxSize()) {
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -284,49 +433,133 @@ fun ScannerOverlay() {
             val boxSizePx = scanBoxSize.toPx()
             val left = (canvasWidth - boxSizePx) / 2f
             val top = (canvasHeight - boxSizePx) / 2f
-            drawRect(color = Color(0x80000000))
-            drawRect(
+
+            // Dark backdrop
+            drawRect(color = Color(0x99000000))
+
+            // Transparent rounded cutout in center
+            drawRoundRect(
                 color = Color.Transparent,
                 topLeft = Offset(left, top),
                 size = Size(boxSizePx, boxSizePx),
+                cornerRadius = CornerRadius(20.dp.toPx(), 20.dp.toPx()),
                 blendMode = BlendMode.Clear
             )
+
+            // Animated laser beam
+            val laserY = top + (boxSizePx * laserProgress)
+            drawRect(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        cornerColor.copy(alpha = 0.9f),
+                        cornerColor.copy(alpha = 0.9f),
+                        Color.Transparent
+                    ),
+                    startX = left,
+                    endX = left + boxSizePx
+                ),
+                topLeft = Offset(left, laserY - 1.5f),
+                size = Size(boxSizePx, 3.dp.toPx())
+            )
         }
+
+        // Corner Brackets
         Box(
             modifier = Modifier
                 .size(scanBoxSize)
                 .align(Alignment.Center)
         ) {
-            listOf(
-                Alignment.TopStart,
-                Alignment.TopEnd,
-                Alignment.BottomStart,
-                Alignment.BottomEnd
-            ).forEach { align ->
-                Box(
-                    modifier = Modifier
-                        .align(align)
-                        .width(cornerLength)
-                        .height(cornerWidth)
-                        .background(cornerColor)
-                )
-                Box(
-                    modifier = Modifier
-                        .align(align)
-                        .width(cornerWidth)
-                        .height(cornerLength)
-                        .background(cornerColor)
-                )
-            }
+            // TopStart
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .width(cornerLength)
+                    .height(cornerWidth)
+                    .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
+                    .background(cornerColor)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .width(cornerWidth)
+                    .height(cornerLength)
+                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                    .background(cornerColor)
+            )
+
+            // TopEnd
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .width(cornerLength)
+                    .height(cornerWidth)
+                    .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                    .background(cornerColor)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .width(cornerWidth)
+                    .height(cornerLength)
+                    .clip(RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp))
+                    .background(cornerColor)
+            )
+
+            // BottomStart
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .width(cornerLength)
+                    .height(cornerWidth)
+                    .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
+                    .background(cornerColor)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .width(cornerWidth)
+                    .height(cornerLength)
+                    .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
+                    .background(cornerColor)
+            )
+
+            // BottomEnd
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .width(cornerLength)
+                    .height(cornerWidth)
+                    .clip(RoundedCornerShape(topEnd = 4.dp, bottomEnd = 4.dp))
+                    .background(cornerColor)
+            )
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .width(cornerWidth)
+                    .height(cornerLength)
+                    .clip(RoundedCornerShape(bottomStart = 4.dp, bottomEnd = 4.dp))
+                    .background(cornerColor)
+            )
         }
-        Text(
-            text = stringResource(R.string.menu_item_scan_qrcode),
-            color = Color.White,
-            style = MaterialTheme.typography.bodyMedium,
+
+        // Subtitle Pill
+        Box(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = scanBoxSize / 2 + 24.dp)
-        )
+                .offset(y = scanBoxSize / 2 + 32.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(KumoColor.ObsidianGlass)
+                .border(BorderStroke(1.dp, KumoColor.CardBorder), RoundedCornerShape(16.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.kumo_scan_qr_desc),
+                color = KumoColor.TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium
+            )
+        }
     }
 }
 

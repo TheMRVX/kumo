@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -66,6 +67,7 @@ fun AkatsukiCloudButton(
     ) {
         Box(
             modifier = Modifier
+                .offset(x = (-10).dp)
                 .size(220.dp, 160.dp)
                 .appleClickable(scaleDown = 0.95f, alphaDown = 0.80f, onClick = onToggleClick),
             contentAlignment = Alignment.Center

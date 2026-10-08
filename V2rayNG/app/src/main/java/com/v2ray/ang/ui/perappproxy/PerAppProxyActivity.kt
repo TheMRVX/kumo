@@ -16,12 +16,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -34,23 +41,30 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
 import com.v2ray.ang.R
 import com.v2ray.ang.dto.AppInfo
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.ui.base.BaseComponentActivity
-import com.v2ray.ang.ui.compose.AppDivider
 import com.v2ray.ang.ui.compose.AppDropdownMenuItems
-import com.v2ray.ang.ui.compose.AppListItem
 import com.v2ray.ang.ui.compose.AppTopBar
 import com.v2ray.ang.ui.compose.ConfirmDialog
-import com.v2ray.ang.ui.compose.ItemDivider
 import com.v2ray.ang.ui.compose.NavigationBarsBottomPadding
 import com.v2ray.ang.ui.compose.verticalScrollbar
+import com.v2ray.ang.ui.kumo.theme.KumoColor
+import com.v2ray.ang.ui.kumo.theme.KumoTheme
+import com.v2ray.ang.util.AppIconFetcher
 import com.v2ray.ang.util.Utils
 
 private enum class PerAppMenuAction(@StringRes val labelRes: Int) {
@@ -72,36 +86,38 @@ class PerAppProxyActivity : BaseComponentActivity() {
 
     @Composable
     override fun ScreenContent() {
-        val apps by viewModel.displayedApps.collectAsStateWithLifecycle()
-        val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
-        val blacklist by viewModel.blacklist.collectAsStateWithLifecycle()
-        val perAppProxyEnabled by viewModel.perAppProxyEnabled.collectAsStateWithLifecycle()
-        val bypassApps by viewModel.bypassApps.collectAsStateWithLifecycle()
+        KumoTheme {
+            val apps by viewModel.displayedApps.collectAsStateWithLifecycle()
+            val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+            val blacklist by viewModel.blacklist.collectAsStateWithLifecycle()
+            val perAppProxyEnabled by viewModel.perAppProxyEnabled.collectAsStateWithLifecycle()
+            val bypassApps by viewModel.bypassApps.collectAsStateWithLifecycle()
 
-        PerAppProxyScreen(
-            apps = apps,
-            isLoading = isLoading,
-            blacklist = blacklist,
-            perAppProxyEnabled = perAppProxyEnabled,
-            bypassApps = bypassApps,
-            onBackClick = { finish() },
-            onPerAppProxyChanged = { viewModel.setPerAppProxyEnabled(it) },
-            onBypassAppsChanged = { viewModel.setBypassAppsEnabled(it) },
-            onToggleApp = { viewModel.toggle(it) },
-            onSearch = { viewModel.filterApps(it) },
-            onSelectAll = { viewModel.selectAll() },
-            onInvertSelection = { viewModel.invertSelection() },
-            onSelectProxyAuto = { viewModel.selectProxyAppAuto(this) },
-            onImportProxyApp = {
-                val content = Utils.getClipboard(applicationContext)
-                viewModel.importProxyApp(content, this)
-            },
-            onExportProxyApp = {
-                val export = viewModel.exportProxyApp()
-                Utils.setClipboard(applicationContext, export)
-                toastSuccess(R.string.toast_success)
-            }
-        )
+            PerAppProxyScreen(
+                apps = apps,
+                isLoading = isLoading,
+                blacklist = blacklist,
+                perAppProxyEnabled = perAppProxyEnabled,
+                bypassApps = bypassApps,
+                onBackClick = { finish() },
+                onPerAppProxyChanged = { viewModel.setPerAppProxyEnabled(it) },
+                onBypassAppsChanged = { viewModel.setBypassAppsEnabled(it) },
+                onToggleApp = { viewModel.toggle(it) },
+                onSearch = { viewModel.filterApps(it) },
+                onSelectAll = { viewModel.selectAll() },
+                onInvertSelection = { viewModel.invertSelection() },
+                onSelectProxyAuto = { viewModel.selectProxyAppAuto(this) },
+                onImportProxyApp = {
+                    val content = Utils.getClipboard(applicationContext)
+                    viewModel.importProxyApp(content, this)
+                },
+                onExportProxyApp = {
+                    val export = viewModel.exportProxyApp()
+                    Utils.setClipboard(applicationContext, export)
+                    toastSuccess(R.string.toast_success)
+                }
+            )
+        }
     }
 }
 
@@ -135,6 +151,7 @@ fun PerAppProxyScreen(
     }
 
     Scaffold(
+        containerColor = KumoColor.PureBlack,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             AppTopBar(
@@ -158,7 +175,8 @@ fun PerAppProxyScreen(
                         IconButton(onClick = { showSearch = true }) {
                             Icon(
                                 painterResource(R.drawable.ic_search_24dp),
-                                contentDescription = stringResource(R.string.acc_search)
+                                contentDescription = stringResource(R.string.acc_search),
+                                tint = KumoColor.TextPrimary
                             )
                         }
                     }
@@ -166,13 +184,14 @@ fun PerAppProxyScreen(
                         IconButton(onClick = { showMenu = true }) {
                             Icon(
                                 painterResource(R.drawable.ic_more_vert_24dp),
-                                contentDescription = stringResource(R.string.acc_more)
+                                contentDescription = stringResource(R.string.acc_more),
+                                tint = KumoColor.TextPrimary
                             )
                         }
                         DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false },
-                            containerColor = MaterialTheme.colorScheme.surface
+                            containerColor = KumoColor.ObsidianCard
                         ) {
                             AppDropdownMenuItems(PerAppMenuAction.entries, { it.labelRes }) { action ->
                                 showMenu = false
@@ -195,69 +214,85 @@ fun PerAppProxyScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surface
+            // Master Controls Card
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(KumoColor.ObsidianCard)
+                    .border(BorderStroke(1.dp, KumoColor.CardBorder), RoundedCornerShape(16.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Row 1: Enable Per-App Proxy
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertizontally,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.per_app_proxy_settings_enable),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = KumoColor.TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Switch(
+                        checked = perAppProxyEnabled,
+                        onCheckedChange = onPerAppProxyChanged,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = KumoColor.AkatsukiRedVibrant,
+                            uncheckedThumbColor = KumoColor.TextSecondary,
+                            uncheckedTrackColor = KumoColor.ElevatedSurface
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = KumoColor.WhiteHairlineSubtle, thickness = 0.5.dp)
+
+                // Row 2: Bypass Apps Mode
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertizontally,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.per_app_proxy_settings_enable),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = perAppProxyEnabled,
-                            modifier = Modifier.scale(0.65f),
-                            onCheckedChange = onPerAppProxyChanged,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                                checkedTrackColor = MaterialTheme.colorScheme.secondary
-                            )
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
+                        verticalAlignment = Alignment.CenterVertizontally
                     ) {
                         Text(
                             text = stringResource(R.string.switch_bypass_apps_mode),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = KumoColor.TextPrimary
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Switch(
-                            checked = bypassApps,
-                            modifier = Modifier.scale(0.65f),
-                            onCheckedChange = onBypassAppsChanged,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = MaterialTheme.colorScheme.onSecondary,
-                                checkedTrackColor = MaterialTheme.colorScheme.secondary
+                        IconButton(onClick = onInfoClick) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_about_24dp),
+                                contentDescription = stringResource(R.string.acc_per_app_proxy_information),
+                                tint = KumoColor.TextSecondary,
+                                modifier = Modifier.padding(2.dp)
                             )
-                        )
+                        }
                     }
-                    IconButton(onClick = onInfoClick) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_about_24dp),
-                            contentDescription = stringResource(R.string.acc_per_app_proxy_information),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    Switch(
+                        checked = bypassApps,
+                        onCheckedChange = onBypassAppsChanged,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = KumoColor.AkatsukiRedVibrant,
+                            uncheckedThumbColor = KumoColor.TextSecondary,
+                            uncheckedTrackColor = KumoColor.ElevatedSurface
                         )
-                    }
+                    )
                 }
             }
-            AppDivider()
 
+            Spacer(modifier = Modifier.padding(top = 4.dp))
+
+            // App List
             LazyColumn(
                 state = listState,
                 modifier = Modifier
@@ -267,25 +302,99 @@ fun PerAppProxyScreen(
             ) {
                 items(items = apps, key = { it.packageName }) { app ->
                     val checked = blacklist.contains(app.packageName)
-                    AppListItem(
+                    KumoAppItem(
                         appName = app.appName,
                         packageName = app.packageName,
-                        icon = null,
                         checked = checked,
                         onCheckedChange = { onToggleApp(app.packageName) }
                     )
-                    ItemDivider()
                 }
             }
         }
     }
 
-    if (showInfoDialog) {
+        if (showInfoDialog) {
         ConfirmDialog(
             message = stringResource(R.string.summary_pref_per_app_proxy),
             dismissText = null,
             onConfirm = {},
             onDismiss = { showInfoDialog = false },
+        )
+    }
+}
+
+
+@Composable
+private fun KumoAppItem(
+    appName: String,
+    packageName: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val model = remember(packageName) {
+        val data = "appicon:$packageName"
+        ImageRequest.Builder(context)
+            .data(data)
+            .fetcherFactory(AppIconFetcher.Factory(context))
+            .build()
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 3.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(if (checked) KumoColor.ObsidianCard else KumoColor.ObsidianCard.copy(alpha = 0.45f))
+            .border(
+                BorderStroke(
+                    0.5.dp,
+                    if (checked) KumoColor.AkatsukiRed.copy(alpha = 0.4f) else KumoColor.WhiteHairlineSubtle
+                ),
+                RoundedCornerShape(12.dp)
+            )
+            .clickable { onCheckedChange(!checked) }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertizontally
+    ) {
+        AsyncImage(
+            model = model,
+            contentDescription = null,
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Fit,
+            error = painterResource(R.drawable.ic_image_24dp),
+            fallback = painterResource(R.drawable.ic_image_24dp)
+        )
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = appName,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = KumoColor.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = packageName,
+                style = MaterialTheme.typography.labelSmall,
+                color = KumoColor.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = CheckboxDefaults.colors(
+                checkedColor = KumoColor.AkatsukiRedVibrant,
+                checkmarkColor = Color.White,
+                uncheckedColor = KumoColor.TextSecondary
+            )
         )
     }
 }

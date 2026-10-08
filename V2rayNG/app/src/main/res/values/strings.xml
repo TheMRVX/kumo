@@ -581,4 +581,16 @@
     <string name="kumo_no_servers">No servers found</string>
     <string name="kumo_paste">Paste</string>
     <string name="kumo_scan_qr">Scan QR</string>
+    <string name="kumo_onboarding_title">Get Started</string>
+    <string name="kumo_onboarding_desc">Add your subscription link or paste configs to begin</string>
+    <string name="kumo_add_subscription">Add Subscription</string>
+    <string name="kumo_save_and_fetch">Save &amp; Fetch Servers</string>
+    <string name="kumo_paste_from_clipboard">Paste from Clipboard</string>
+    <string name="kumo_subscription_saved">Subscription saved successfully</string>
+    <string name="kumo_clipboard_empty_or_invalid">No link found in clipboard</string>
+    <string name="kumo_no_server_selected">Please select a server first</string>
+    <string name="kumo_scan_qr_desc">Align camera with the QR code</string>
+    <string name="kumo_language">Language</string>
+    <string name="kumo_lang_persian">فا</string>
+    <string name="kumo_lang_english">EN</string>
 </resources>

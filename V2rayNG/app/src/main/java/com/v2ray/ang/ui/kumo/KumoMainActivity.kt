@@ -43,18 +43,30 @@ class KumoMainActivity : HelperBaseComponentActivity() {
         BackHandler { moveTaskToBack(false) }
 
         KumoTheme {
-            KumoMainScreen(
-                mainViewModel = mainViewModel,
-                onAction = { action ->
-                    when (action) {
-                        MainAction.ToggleService -> handleToggleAction()
-                        MainAction.TestCurrentServer -> handlePingAction()
-                        MainAction.ImportQRcode -> importQRcode()
-                        is MainAction.SelectServer -> setSelectServer(action.guid)
-                        else -> mainViewModel.onAction(action)
+            var isSplashFinished by androidx.compose.runtime.saveable.rememberSaveable {
+                androidx.compose.runtime.mutableStateOf(false)
+            }
+
+            androidx.compose.foundation.layout.Box(modifier = androidx.compose.ui.Modifier.fillMaxSize()) {
+                KumoMainScreen(
+                    mainViewModel = mainViewModel,
+                    onAction = { action ->
+                        when (action) {
+                            MainAction.ToggleService -> handleToggleAction()
+                            MainAction.TestCurrentServer -> handlePingAction()
+                            MainAction.ImportQRcode -> importQRcode()
+                            is MainAction.SelectServer -> setSelectServer(action.guid)
+                            else -> mainViewModel.onAction(action)
+                        }
                     }
+                )
+
+                if (!isSplashFinished) {
+                    com.v2ray.ang.ui.kumo.components.KumoSplashScreen(
+                        onFinished = { isSplashFinished = true }
+                    )
                 }
-            )
+            }
         }
     }
 
@@ -87,7 +99,10 @@ class KumoMainActivity : HelperBaseComponentActivity() {
             if (firstServer != null) {
                 setSelectServer(firstServer.guid)
             } else {
-                toast(R.string.title_file_chooser)
+                com.v2ray.ang.ui.kumo.components.KumoToastManager.show(
+                    getString(R.string.kumo_no_server_selected),
+                    com.v2ray.ang.ui.kumo.components.ToastType.WARNING
+                )
                 return
             }
         }
