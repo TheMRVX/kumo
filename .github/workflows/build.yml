@@ -42,7 +42,8 @@ jobs:
         elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
           RAW_TAG="${GITHUB_REF#refs/tags/}"
         else
-          RAW_TAG="2.3.10"
+          RAW_TAG=$(grep 'versionName =' V2rayNG/app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+          [ -z "$RAW_TAG" ] && RAW_TAG="2.3.12"
         fi
         CLEAN_VERSION="${RAW_TAG#v}"
         echo "RAW_TAG=$RAW_TAG" >> $GITHUB_ENV
@@ -215,10 +216,13 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           else
-            TAG="2.3.10"
+            TAG=$(grep 'versionName =' V2rayNG/app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+            [ -z "$TAG" ] && TAG="2.3.12"
           fi
+          CLEAN_VERSION="${TAG#v}"
           echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
-          echo "Publishing release with tag: $TAG"
+          echo "KUMO_VERSION=$CLEAN_VERSION" >> $GITHUB_ENV
+          echo "Publishing release with tag: $TAG, version: $CLEAN_VERSION"
 
       - name: Download APK artifacts
         uses: actions/download-artifact@v8
