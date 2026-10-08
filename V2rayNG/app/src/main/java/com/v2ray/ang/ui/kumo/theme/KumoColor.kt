@@ -6,6 +6,7 @@ object KumoColor {
     // Backgrounds & Surfaces (Apple Dark Layers)
     val PureBlack = Color(0xFF000000)
     val ObsidianCard = Color(0xFF121214)
+    val ObsidianGlass = Color(0xCC121214)
     val ElevatedSurface = Color(0xFF1C1C20)
     val SubtleSurface = Color(0xFF25252A)
     val FrostedSurface = Color(0xCC121214)
@@ -21,6 +22,7 @@ object KumoColor {
     val WhiteHairlineSubtle = Color(0xFFFFFFFF).copy(alpha = 0.08f)
     val WhiteHairlineFocus = Color(0xFFFFFFFF).copy(alpha = 0.35f)
     val WhiteHairlineCrisp = Color(0xFFFFFFFF).copy(alpha = 0.85f)
+    val CardBorder = WhiteHairline
 
     // Typography
     val TextPrimary = Color(0xFFFFFFFF)
@@ -31,4 +33,6 @@ object KumoColor {
     val PingGood = Color(0xFF30D158)
     val PingMedium = Color(0xFFFF9F0A)
     val PingBad = Color(0xFFFF453A)
+    val StatusConnected = PingGood
+    val StatusTesting = PingMedium
 }

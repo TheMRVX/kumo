@@ -71,8 +71,8 @@ import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.QRCodeDecoder
 import com.v2ray.ang.ui.kumo.theme.KumoTheme
 import com.v2ray.ang.ui.kumo.theme.KumoColor
-import com.v2ray.ang.ui.kumo.theme.kumoCard
-import com.v2ray.ang.ui.kumo.theme.appleClickable
+import com.v2ray.ang.ui.kumo.modifiers.kumoCard
+import com.v2ray.ang.ui.kumo.modifiers.appleClickable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -212,7 +212,7 @@ fun ScannerScreen(
                 .statusBarsPadding()
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertizontally
+            verticalAlignment = Alignment.CenterVertically
         ) {
             // Back Button
             Box(
@@ -252,7 +252,7 @@ fun ScannerScreen(
             // Action Buttons
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertizontally
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 if (isScanning && hasTorch) {
                     Box(
@@ -336,7 +336,7 @@ fun ScannerScreen(
                     .padding(horizontal = 24.dp, vertical = 12.dp)
             ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertizontally,
+                    verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(

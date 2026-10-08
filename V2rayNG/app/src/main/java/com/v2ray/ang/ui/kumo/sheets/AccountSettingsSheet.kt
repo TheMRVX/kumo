@@ -428,7 +428,7 @@ fun AccountSettingsSheet(
                             fontWeight = FontWeight.Medium
                         )
                         Text(
-                            text = if (currentLang == "fa") "فارسی" else if (currentLang == "en") "English" else stringResource(R.string.auto),
+                            text = if (currentLang == "fa") "فارسی" else if (currentLang == "en") "English" else "Auto",
                             color = KumoColor.TextSecondary,
                             fontSize = 12.sp
                         )
