@@ -42,7 +42,7 @@ jobs:
         elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
           RAW_TAG="${GITHUB_REF#refs/tags/}"
         else
-          RAW_TAG=$(grep 'versionName =' V2rayNG/app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+          RAW_TAG=$(grep 'versionName =' app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
           [ -z "$RAW_TAG" ] && RAW_TAG="2.3.12"
         fi
         CLEAN_VERSION="${RAW_TAG#v}"
@@ -55,7 +55,7 @@ jobs:
       with:
         log-accepted-android-sdk-licenses: false
         cmdline-tools-version: '14742923'
-        packages: 'platforms;android-37.0 build-tools;37.0.0 platform-tools'
+        packages: 'platforms;android-36 build-tools;36.0.0 platform-tools'
 
     - name: Install NDK
       run: |
@@ -63,9 +63,7 @@ jobs:
           --channel=0 \
           --install "ndk;30.0.16248370"
         echo "NDK_HOME=$ANDROID_HOME/ndk/30.0.16248370" >> $GITHUB_ENV
-        sed -i '10i\
-        \
-            ndkVersion = "30.0.16248370"' ${{ github.workspace }}/V2rayNG/app/build.gradle.kts
+        sed -i '/compileSdk =/a\    ndkVersion = "30.0.16248370"' ${{ github.workspace }}/app/build.gradle.kts
 
     - name: Restore cached libhevtun
       id: cache-libhevtun-restore
@@ -88,7 +86,7 @@ jobs:
 
     - name: Copy libhevtun
       run: |
-        cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/V2rayNG/app
+        cp -r ${{ github.workspace }}/libs ${{ github.workspace }}/app
 
     - name: Fetch AndroidLibXrayLite tag
       run: |
@@ -104,7 +102,7 @@ jobs:
         repository: '2dust/AndroidLibXrayLite'
         tag: ${{ env.CURRENT_TAG }}
         fileName: 'libv2ray.aar'
-        out-file-path: V2rayNG/app/libs/
+        out-file-path: app/libs/
 
     - name: Setup Java
       uses: actions/setup-java@v6.0.1
@@ -137,7 +135,7 @@ jobs:
 
     - name: Build APKs
       run: |
-        cd ${{ github.workspace }}/V2rayNG
+        cd ${{ github.workspace }}
         echo "sdk.dir=${ANDROID_HOME}" > local.properties
         chmod 755 gradlew
         ./gradlew :app:testPlaystoreDebugUnitTest
@@ -152,7 +150,7 @@ jobs:
     - name: Verify Native Libraries in APKs
       run: |
         status=0
-        for apk in ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk; do
+        for apk in ${{ github.workspace }}/app/build/outputs/apk/*/release/*.apk; do
           [ -e "$apk" ] || continue
           entries=$(unzip -Z1 "$apk" | grep '^lib/' || true)
           echo "=== Inspecting $(basename "$apk") ==="
@@ -165,42 +163,42 @@ jobs:
       if: success()
       with:
         name: arm64-v8a
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*arm64-v8a*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*arm64-v8a*.apk
 
     - name: Upload armeabi-v7a APKs
       uses: actions/upload-artifact@v7
       if: success()
       with:
         name: armeabi-v7a
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*armeabi-v7a*.apk
 
     - name: Upload x86 APKs
       uses: actions/upload-artifact@v7
       if: success()
       with:
         name: x86-apk
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*x86*.apk
 
     - name: Upload x86_64 APKs
       uses: actions/upload-artifact@v7
       if: success()
       with:
         name: x86_64-apk
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*x86_64*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*x86_64*.apk
 
     - name: Upload universal APKs
       uses: actions/upload-artifact@v7
       if: success()
       with:
         name: universal-apk
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*universal*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*universal*.apk
 
     - name: Upload All APKs
       uses: actions/upload-artifact@v7
       if: success()
       with:
         name: all-kumo-apks
-        path: ${{ github.workspace }}/V2rayNG/app/build/outputs/apk/*/release/*.apk
+        path: ${{ github.workspace }}/app/build/outputs/apk/*/release/*.apk
 
   sign-and-release:
     name: Sign & Publish GitHub Release
@@ -216,7 +214,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           else
-            TAG=$(grep 'versionName =' V2rayNG/app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+            TAG=$(grep 'versionName =' app/build.gradle.kts 2>/dev/null | head -1 | awk -F'"' '{print $2}')
             [ -z "$TAG" ] && TAG="2.3.12"
           fi
           CLEAN_VERSION="${TAG#v}"
