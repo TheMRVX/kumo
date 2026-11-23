@@ -17,12 +17,13 @@ import sys
 import xml.etree.ElementTree as ET
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-RES_DIR = os.path.join(REPO_ROOT, "V2rayNG", "app", "src", "main", "res")
+APP_DIR = os.path.join(REPO_ROOT, "app") if os.path.isdir(os.path.join(REPO_ROOT, "app")) else os.path.join(REPO_ROOT, "V2rayNG", "app")
+RES_DIR = os.path.join(APP_DIR, "src", "main", "res")
 VALUES_STRINGS = os.path.join(RES_DIR, "values", "strings.xml")
 VALUES_FA_STRINGS = os.path.join(RES_DIR, "values-fa", "strings.xml")
-BUILD_GRADLE = os.path.join(REPO_ROOT, "V2rayNG", "app", "build.gradle.kts")
-LANGUAGE_KT = os.path.join(REPO_ROOT, "V2rayNG", "app", "src", "main", "java", "com", "v2ray", "ang", "enums", "Language.kt")
-MANIFEST_XML = os.path.join(REPO_ROOT, "V2rayNG", "app", "src", "main", "AndroidManifest.xml")
+BUILD_GRADLE = os.path.join(APP_DIR, "build.gradle.kts")
+LANGUAGE_KT = os.path.join(APP_DIR, "src", "main", "java", "com", "v2ray", "ang", "enums", "Language.kt")
+MANIFEST_XML = os.path.join(APP_DIR, "src", "main", "AndroidManifest.xml")
 
 FORBIDDEN_LOCALES = [
     "values-ar", "values-bn", "values-bqi-rIR", "values-ru",
