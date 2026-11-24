@@ -16,11 +16,98 @@ import java.net.InetSocketAddress
 import java.net.MalformedURLException
 import java.net.Proxy
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URL
+import java.security.cert.CertificateException
 import java.util.concurrent.TimeUnit
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 object HttpUtil {
+
+    internal const val INITIAL_TLS_HANDSHAKE_CAP_MS = 5_000
+    internal const val INITIAL_DOWNLOAD_HANDSHAKE_CAP_MS = 8_000
+    private const val TLS_FALLBACK_CACHE_TTL_MS = 10 * 60 * 1000L
+    private const val TLS_FALLBACK_CACHE_MAX_ENTRIES = 64
+
+    internal data class TlsFallbackCacheKey(
+        val host: String,
+        val port: Int,
+        val isProxied: Boolean
+    )
+
+    internal var currentTimeMs: () -> Long = { System.currentTimeMillis() }
+
+    private val tlsFallbackCache = object : LinkedHashMap<TlsFallbackCacheKey, Long>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TlsFallbackCacheKey, Long>?): Boolean {
+            return size > TLS_FALLBACK_CACHE_MAX_ENTRIES
+        }
+    }
+
+    internal fun shouldPreferTls12(key: TlsFallbackCacheKey): Boolean {
+        val now = currentTimeMs()
+        synchronized(tlsFallbackCache) {
+            val recordedAt = tlsFallbackCache[key] ?: return false
+            if (now - recordedAt > TLS_FALLBACK_CACHE_TTL_MS) {
+                tlsFallbackCache.remove(key)
+                return false
+            }
+            return true
+        }
+    }
+
+    internal fun markTls12Preferred(key: TlsFallbackCacheKey) {
+        val now = currentTimeMs()
+        synchronized(tlsFallbackCache) {
+            val iterator = tlsFallbackCache.entries.iterator()
+            while (iterator.hasNext()) {
+                if (now - iterator.next().value > TLS_FALLBACK_CACHE_TTL_MS) {
+                    iterator.remove()
+                }
+            }
+            tlsFallbackCache[key] = now
+        }
+    }
+
+    internal fun clearTls12Preference(key: TlsFallbackCacheKey) {
+        synchronized(tlsFallbackCache) {
+            tlsFallbackCache.remove(key)
+        }
+    }
+
+    internal fun clearTlsFallbackCacheForTesting() {
+        synchronized(tlsFallbackCache) {
+            tlsFallbackCache.clear()
+        }
+    }
+
+    internal fun computeInitialAttemptTimeoutMs(totalTimeoutMs: Int, maxInitialMs: Int): Int {
+        val safeTotal = maxOf(1, totalTimeoutMs)
+        return minOf(maxInitialMs, maxOf(1, safeTotal / 2))
+    }
+
+    internal fun computeRetryTimeoutMs(totalTimeoutMs: Int, elapsedMs: Long): Int {
+        val safeTotal = maxOf(1, totalTimeoutMs)
+        val floor = minOf(safeTotal, maxOf(1, minOf(3_000, safeTotal / 2)))
+        return (safeTotal.toLong() - elapsedMs).coerceIn(floor.toLong(), safeTotal.toLong()).toInt()
+    }
+
+    internal fun isRetryableTlsOrTimeout(error: IOException, responseHeadersReceived: Boolean): Boolean {
+        if (responseHeadersReceived) return false
+        if (error is SocketTimeoutException) return true
+        if (error is SSLException) {
+            if (error is SSLPeerUnverifiedException) return false
+            val visited = HashSet<Throwable>()
+            var current: Throwable? = error.cause
+            while (current != null && visited.add(current)) {
+                if (current is CertificateException) return false
+                current = current.cause
+            }
+            return true
+        }
+        return false
+    }
 
     /**
      * Converts the domain part of a URL string to its IDN (Punycode, ASCII Compatible Encoding) format.
