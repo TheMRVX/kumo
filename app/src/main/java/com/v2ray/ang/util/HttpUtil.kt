@@ -4,9 +4,15 @@ import com.v2ray.ang.AppConfig
 import com.v2ray.ang.AppConfig.LOOPBACK
 import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.dto.UrlContentRequest
+import okhttp3.Call
+import okhttp3.ConnectionSpec
 import okhttp3.Credentials
+import okhttp3.EventListener
+import okhttp3.Handshake
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
+import okhttp3.TlsVersion
 import java.io.File
 import java.io.IOException
 import java.net.IDN
@@ -20,6 +26,7 @@ import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URL
 import java.security.cert.CertificateException
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 import javax.net.ssl.SSLException
 import javax.net.ssl.SSLPeerUnverifiedException
@@ -38,6 +45,55 @@ object HttpUtil {
     )
 
     internal var currentTimeMs: () -> Long = { System.currentTimeMillis() }
+    internal var clientBuilderFactory: () -> OkHttpClient.Builder = { OkHttpClient.Builder() }
+    internal var attemptExecutor: (OkHttpClient, Request, TlsAttemptEventListener) -> Response =
+        { client, request, _ -> client.newCall(request).execute() }
+
+    private val TLS_1_2_CONNECTION_SPEC = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
+        .tlsVersions(TlsVersion.TLS_1_2)
+        .build()
+
+    private val TLS_1_2_SPECS = listOf(TLS_1_2_CONNECTION_SPEC, ConnectionSpec.CLEARTEXT)
+
+    internal class TlsAttemptEventListener : EventListener() {
+        @Volatile
+        internal var secureConnectCompleted = false
+
+        @Volatile
+        internal var responseHeadersReceived = false
+
+        @Volatile
+        internal var redirected = false
+
+        override fun connectStart(call: Call, inetSocketAddress: InetSocketAddress, proxy: Proxy) {
+            secureConnectCompleted = false
+            responseHeadersReceived = false
+        }
+
+        override fun secureConnectStart(call: Call) {
+            secureConnectCompleted = false
+        }
+
+        override fun secureConnectEnd(call: Call, handshake: Handshake?) {
+            secureConnectCompleted = true
+        }
+
+        override fun requestHeadersStart(call: Call) {
+            responseHeadersReceived = false
+        }
+
+        override fun responseHeadersEnd(call: Call, response: Response) {
+            responseHeadersReceived = true
+            if (response.isRedirect) {
+                redirected = true
+            }
+        }
+    }
+
+    private sealed interface SubscriptionFetchStep {
+        data class Redirect(val nextUrl: String) : SubscriptionFetchStep
+        data class Complete(val body: String) : SubscriptionFetchStep
+    }
 
     private val tlsFallbackCache = object : LinkedHashMap<TlsFallbackCacheKey, Long>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TlsFallbackCacheKey, Long>?): Boolean {
@@ -199,7 +255,6 @@ object HttpUtil {
      */
     fun getUrlContent(request: UrlContentRequest): String? {
         val url = request.url ?: return null
-        val client = buildOkHttpClient(request.timeout, request.httpPort, request.proxyUsername, request.proxyPassword, followRedirects = true)
         val requestBuilder = Request.Builder()
             .url(url)
             .get()
@@ -208,12 +263,22 @@ object HttpUtil {
             requestBuilder.header("Proxy-Authorization", Credentials.basic(request.proxyUsername, request.proxyPassword))
         }
         try {
-            client.newCall(requestBuilder.build()).execute().use { response ->
+            return executeWithTlsFallback(
+                url = url,
+                timeoutMs = request.timeout,
+                initialCapMs = INITIAL_TLS_HANDSHAKE_CAP_MS,
+                httpPort = request.httpPort,
+                proxyUsername = request.proxyUsername,
+                proxyPassword = request.proxyPassword,
+                followRedirects = true,
+                request = requestBuilder.build()
+            ) { response ->
                 if (!response.isSuccessful) {
                     LogUtil.w(AppConfig.TAG, "Failed to get URL content, code=${response.code}")
-                    return null
+                    null
+                } else {
+                    response.body?.string()
                 }
-                return response.body?.string()
             }
         } catch (e: Exception) {
             LogUtil.e(AppConfig.TAG, "Failed to get URL content", e)
@@ -264,12 +329,6 @@ object HttpUtil {
                 throw IOException("Unsupported URL scheme")
             }
 
-            val client = buildOkHttpClient(request.timeout, request.httpPort, request.proxyUsername, request.proxyPassword, followRedirects = false)
-            val finalUserAgent = if (request.userAgent.isNullOrBlank()) {
-                "v2rayNG/${BuildConfig.VERSION_NAME}"
-            } else {
-                request.userAgent
-            }
             val requestBuilder = Request.Builder()
                 .url(activeUrl)
                 .get()
@@ -292,7 +351,16 @@ object HttpUtil {
                 requestBuilder.header("Proxy-Authorization", Credentials.basic(request.proxyUsername, request.proxyPassword))
             }
 
-            client.newCall(requestBuilder.build()).execute().use { response ->
+            val stepResult = executeWithTlsFallback(
+                url = activeUrl,
+                timeoutMs = request.timeout,
+                initialCapMs = INITIAL_TLS_HANDSHAKE_CAP_MS,
+                httpPort = request.httpPort,
+                proxyUsername = request.proxyUsername,
+                proxyPassword = request.proxyPassword,
+                followRedirects = false,
+                request = requestBuilder.build()
+            ) { response ->
                 when {
                     response.isRedirect -> {
                         val location = response.header("Location")
@@ -307,19 +375,32 @@ object HttpUtil {
                         if (nextScheme != "https" && nextScheme != "http") {
                             throw IOException("Unsupported redirect scheme")
                         }
-                        currentUrl = nextUrl
-                        continue
+                        SubscriptionFetchStep.Redirect(nextUrl)
                     }
 
                     response.isSuccessful -> {
-                        val body = response.body ?: return ""
-                        return readBoundedResponseBody(body.byteStream(), MAX_SUBSCRIPTION_BODY_BYTES)
+                        val body = response.body
+                        val text = if (body == null) {
+                            ""
+                        } else {
+                            readBoundedResponseBody(body.byteStream(), MAX_SUBSCRIPTION_BODY_BYTES)
+                        }
+                        SubscriptionFetchStep.Complete(text)
                     }
 
                     else -> {
                         throw IOException("Request failed with status code ${response.code}")
                     }
                 }
+            }
+
+            when (stepResult) {
+                is SubscriptionFetchStep.Redirect -> {
+                    currentUrl = stepResult.nextUrl
+                    continue
+                }
+
+                is SubscriptionFetchStep.Complete -> return stepResult.body
             }
         }
         throw IOException("Too many redirects")
@@ -358,18 +439,156 @@ object HttpUtil {
         }
     }
 
+    private fun <T> executeWithTlsFallback(
+        url: String,
+        timeoutMs: Int,
+        initialCapMs: Int,
+        httpPort: Int,
+        proxyUsername: String?,
+        proxyPassword: String?,
+        followRedirects: Boolean,
+        request: Request,
+        responseHandler: (Response) -> T
+    ): T {
+        val parsedUri = runCatching { URI(Utils.fixIllegalUrl(url)) }.getOrNull()
+        val scheme = parsedUri?.scheme?.lowercase(Locale.ROOT)
+        val rawHost = parsedUri?.host
+        if (scheme != "https" || rawHost.isNullOrBlank()) {
+            val listener = TlsAttemptEventListener()
+            val client = buildOkHttpClient(
+                timeout = timeoutMs,
+                httpPort = httpPort,
+                proxyUsername = proxyUsername,
+                proxyPassword = proxyPassword,
+                followRedirects = followRedirects,
+                eventListener = listener
+            )
+            return attemptExecutor(client, request, listener).use(responseHandler)
+        }
+
+        val normalizedHost = toIdnDomain(rawHost.trim('[', ']')).lowercase(Locale.ROOT)
+        val effectivePort = if (parsedUri.port > 0) parsedUri.port else 443
+        val isProxied = httpPort != 0
+        val cacheKey = TlsFallbackCacheKey(normalizedHost, effectivePort, isProxied)
+
+        if (shouldPreferTls12(cacheKey)) {
+            val startMs = currentTimeMs()
+            val cachedListener = TlsAttemptEventListener()
+            val tls12Client = buildOkHttpClient(
+                timeout = timeoutMs,
+                httpPort = httpPort,
+                proxyUsername = proxyUsername,
+                proxyPassword = proxyPassword,
+                followRedirects = followRedirects,
+                connectionSpecs = TLS_1_2_SPECS,
+                eventListener = cachedListener
+            )
+            try {
+                return attemptExecutor(tls12Client, request, cachedListener).use(responseHandler)
+            } catch (e: IOException) {
+                if (!isRetryableTlsOrTimeout(e, cachedListener.responseHeadersReceived)) {
+                    throw e
+                }
+                clearTls12Preference(cacheKey)
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "Cached TLS 1.2 failed for $normalizedHost:$effectivePort (proxied=$isProxied), retrying default TLS",
+                    e
+                )
+                val retryTimeout = computeRetryTimeoutMs(timeoutMs, currentTimeMs() - startMs)
+                val fallbackListener = TlsAttemptEventListener()
+                val defaultClient = buildOkHttpClient(
+                    timeout = retryTimeout,
+                    httpPort = httpPort,
+                    proxyUsername = proxyUsername,
+                    proxyPassword = proxyPassword,
+                    followRedirects = followRedirects,
+                    eventListener = fallbackListener
+                )
+                return attemptExecutor(defaultClient, request, fallbackListener).use(responseHandler)
+            }
+        }
+
+        val startMs = currentTimeMs()
+        val initialTimeout = computeInitialAttemptTimeoutMs(timeoutMs, initialCapMs)
+        val primaryListener = TlsAttemptEventListener()
+        val primaryClient = buildOkHttpClient(
+            timeout = initialTimeout,
+            httpPort = httpPort,
+            proxyUsername = proxyUsername,
+            proxyPassword = proxyPassword,
+            followRedirects = followRedirects,
+            eventListener = primaryListener
+        )
+
+        return try {
+            attemptExecutor(primaryClient, request, primaryListener).use(responseHandler)
+        } catch (e: IOException) {
+            if (!isRetryableTlsOrTimeout(e, primaryListener.responseHeadersReceived)) {
+                throw e
+            }
+            val retryTimeout = computeRetryTimeoutMs(timeoutMs, currentTimeMs() - startMs)
+            val retryListener = TlsAttemptEventListener()
+            if (!primaryListener.secureConnectCompleted) {
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "TLS handshake stalled/failed for $normalizedHost:$effectivePort (proxied=$isProxied), retrying TLS 1.2",
+                    e
+                )
+                val tls12Client = buildOkHttpClient(
+                    timeout = retryTimeout,
+                    httpPort = httpPort,
+                    proxyUsername = proxyUsername,
+                    proxyPassword = proxyPassword,
+                    followRedirects = followRedirects,
+                    connectionSpecs = TLS_1_2_SPECS,
+                    eventListener = retryListener
+                )
+                val result = attemptExecutor(tls12Client, request, retryListener).use(responseHandler)
+                if (!retryListener.redirected) {
+                    markTls12Preferred(cacheKey)
+                }
+                result
+            } else {
+                LogUtil.w(
+                    AppConfig.TAG,
+                    "Pre-header timeout after TLS 1.3 handshake for $normalizedHost:$effectivePort (proxied=$isProxied), retrying default TLS",
+                    e
+                )
+                val defaultClient = buildOkHttpClient(
+                    timeout = retryTimeout,
+                    httpPort = httpPort,
+                    proxyUsername = proxyUsername,
+                    proxyPassword = proxyPassword,
+                    followRedirects = followRedirects,
+                    eventListener = retryListener
+                )
+                attemptExecutor(defaultClient, request, retryListener).use(responseHandler)
+            }
+        }
+    }
+
     private fun buildOkHttpClient(
         timeout: Int,
         httpPort: Int,
         proxyUsername: String?,
         proxyPassword: String?,
-        followRedirects: Boolean
+        followRedirects: Boolean,
+        connectionSpecs: List<ConnectionSpec>? = null,
+        eventListener: EventListener? = null
     ): OkHttpClient {
-        val builder = OkHttpClient.Builder()
+        val builder = clientBuilderFactory()
             .connectTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .readTimeout(timeout.toLong(), TimeUnit.MILLISECONDS)
             .followRedirects(followRedirects)
             .followSslRedirects(followRedirects)
+
+        if (connectionSpecs != null) {
+            builder.connectionSpecs(connectionSpecs)
+        }
+        if (eventListener != null) {
+            builder.eventListener(eventListener)
+        }
 
         if (httpPort != 0) {
             builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress(LOOPBACK, httpPort)))
@@ -413,7 +632,6 @@ object HttpUtil {
         targetFile: File
     ): Boolean {
         val url = request.url ?: return false
-        val client = buildOkHttpClient(request.timeout, request.httpPort, request.proxyUsername, request.proxyPassword, followRedirects = true)
         val requestBuilder = Request.Builder()
             .url(url)
             .get()
@@ -423,12 +641,21 @@ object HttpUtil {
         }
 
         return try {
-            client.newCall(requestBuilder.build()).execute().use { response ->
+            executeWithTlsFallback(
+                url = url,
+                timeoutMs = request.timeout,
+                initialCapMs = INITIAL_DOWNLOAD_HANDSHAKE_CAP_MS,
+                httpPort = request.httpPort,
+                proxyUsername = request.proxyUsername,
+                proxyPassword = request.proxyPassword,
+                followRedirects = true,
+                request = requestBuilder.build()
+            ) { response ->
                 if (!response.isSuccessful) {
                     LogUtil.w(AppConfig.TAG, "Failed to download file, code=${response.code}, url=$url")
-                    return false
+                    return@executeWithTlsFallback false
                 }
-                val body = response.body ?: return false
+                val body = response.body ?: return@executeWithTlsFallback false
                 body.byteStream().use { input ->
                     targetFile.outputStream().use { output ->
                         input.copyTo(output)
