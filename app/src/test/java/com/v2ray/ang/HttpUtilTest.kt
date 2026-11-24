@@ -13,13 +13,17 @@ import okhttp3.TlsVersion
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.io.IOException
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.ServerSocket
 import java.net.SocketTimeoutException
 import java.nio.file.Path
@@ -30,10 +34,33 @@ import javax.net.ssl.SSLPeerUnverifiedException
 
 class HttpUtilTest {
 
+    private val capturedWarnings = mutableListOf<String>()
+
+    @BeforeEach
+    fun setUp() {
+        capturedWarnings.clear()
+        HttpUtil.warnLogger = { msg, _ -> capturedWarnings.add(msg) }
+        HttpUtil.errorLogger = { _, _ -> }
+    }
+
     @AfterEach
     fun tearDown() {
         HttpUtil.clientBuilderFactory = { OkHttpClient.Builder() }
         HttpUtil.attemptExecutor = { client, req, _ -> client.newCall(req).execute() }
+        HttpUtil.warnLogger = { message, error ->
+            if (error != null) {
+                com.v2ray.ang.util.LogUtil.w(AppConfig.TAG, message, error)
+            } else {
+                com.v2ray.ang.util.LogUtil.w(AppConfig.TAG, message)
+            }
+        }
+        HttpUtil.errorLogger = { message, error ->
+            if (error != null) {
+                com.v2ray.ang.util.LogUtil.e(AppConfig.TAG, message, error)
+            } else {
+                com.v2ray.ang.util.LogUtil.e(AppConfig.TAG, message)
+            }
+        }
         HttpUtil.currentTimeMs = { System.currentTimeMillis() }
         HttpUtil.clearTlsFallbackCacheForTesting()
     }
@@ -366,5 +393,139 @@ class HttpUtilTest {
         }
         assertEquals(1, attempts)
         assertEquals(15_000, observedTimeouts[0])
+    }
+
+    @Test
+    fun testTlsAttemptEventListener_resetsPerHopOnRedirectAndSkipsCachingOnRedirectedRetry() {
+        val listener = HttpUtil.TlsAttemptEventListener()
+        val dummyReq = Request.Builder().url("https://hop1.example/a").build()
+        val call = OkHttpClient().newCall(dummyReq)
+
+        listener.connectStart(call, InetSocketAddress("127.0.0.1", 443), Proxy.NO_PROXY)
+        listener.secureConnectStart(call)
+        listener.secureConnectEnd(call, null)
+        listener.requestHeadersStart(call)
+        listener.responseHeadersEnd(call, buildOkResponse(dummyReq, code = 302, body = ""))
+        assertTrue(listener.secureConnectCompleted)
+        assertTrue(listener.responseHeadersReceived)
+        assertTrue(listener.redirected)
+
+        listener.connectStart(call, InetSocketAddress("127.0.0.1", 443), Proxy.NO_PROXY)
+        assertFalse(listener.secureConnectCompleted)
+        assertFalse(listener.responseHeadersReceived)
+        assertTrue(listener.redirected)
+
+        var attempts = 0
+        HttpUtil.attemptExecutor = { _, req, attemptListener ->
+            attempts++
+            if (attempts == 1) {
+                throw SocketTimeoutException("Hop 2 handshake stalled")
+            }
+            attemptListener.redirected = true
+            buildOkResponse(req, body = "redirected-ok")
+        }
+
+        val result = HttpUtil.getUrlContent(
+            UrlContentRequest(url = "https://hop1.example/secret?token=abc", timeout = 15_000)
+        )
+        assertEquals("redirected-ok", result)
+        assertEquals(2, attempts)
+        assertFalse(HttpUtil.shouldPreferTls12(HttpUtil.TlsFallbackCacheKey("hop1.example", 443, isProxied = false)))
+        assertTrue(capturedWarnings.none { it.contains("secret") || it.contains("token=abc") })
+    }
+
+    @Test
+    fun testGetUrlContentWithUserAgent_proxiedAndDirectMaintainSeparateCacheAndProxyConfig() {
+        var attempts = 0
+        val observedProxies = mutableListOf<Proxy?>()
+        val observedTls12 = mutableListOf<Boolean>()
+
+        HttpUtil.attemptExecutor = { client, req, _ ->
+            attempts++
+            observedProxies.add(client.proxy)
+            observedTls12.add(hasTls12OnlySpec(client))
+            if (attempts == 1) {
+                throw SocketTimeoutException("Direct ISP stalled")
+            }
+            buildOkResponse(req, body = "ok")
+        }
+
+        HttpUtil.getUrlContentWithUserAgent(
+            UrlContentRequest(url = "https://sub.example:2095/path", timeout = 15_000, httpPort = 0)
+        )
+        assertTrue(HttpUtil.shouldPreferTls12(HttpUtil.TlsFallbackCacheKey("sub.example", 2095, isProxied = false)))
+        assertFalse(HttpUtil.shouldPreferTls12(HttpUtil.TlsFallbackCacheKey("sub.example", 2095, isProxied = true)))
+
+        HttpUtil.getUrlContentWithUserAgent(
+            UrlContentRequest(url = "https://sub.example:2095/path", timeout = 15_000, httpPort = 10809)
+        )
+        assertEquals(3, attempts)
+        assertEquals(null, observedProxies[0])
+        assertEquals(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", 10809)), observedProxies[2])
+        assertFalse(observedTls12[2])
+    }
+
+    @Test
+    fun testGetUrlContentWithUserAgent_nonRetryableErrorsAbortAfterSingleAttempt() {
+        val nonRetryableErrors = listOf(
+            SSLPeerUnverifiedException("Hostname mismatch") to false,
+            SSLException(RuntimeException(CertificateException("Untrusted"))) to false,
+            SocketTimeoutException("Body read timed out") to true
+        )
+
+        for ((error, headersReceived) in nonRetryableErrors) {
+            var attempts = 0
+            HttpUtil.attemptExecutor = { _, _, listener ->
+                attempts++
+                listener.responseHeadersReceived = headersReceived
+                throw error
+            }
+            assertThrows(IOException::class.java) {
+                HttpUtil.getUrlContentWithUserAgent(
+                    UrlContentRequest(url = "https://127.0.0.1:443/sub", timeout = 15_000)
+                )
+            }
+            assertEquals(1, attempts)
+        }
+    }
+
+    @Test
+    fun testGetUrlContent_and_downloadToFile_preserveErrorSwallowingContracts(@TempDir tempDir: Path) {
+        HttpUtil.attemptExecutor = { _, req, _ -> buildOkResponse(req, code = 500, body = "err") }
+        assertNull(HttpUtil.getUrlContent(UrlContentRequest(url = "https://127.0.0.1:443/api", timeout = 15_000)))
+        assertFalse(
+            HttpUtil.downloadToFile(
+                UrlContentRequest(url = "https://127.0.0.1:443/geoip.dat", timeout = 15_000),
+                tempDir.resolve("fail-status.dat").toFile()
+            )
+        )
+
+        HttpUtil.attemptExecutor = { _, _, _ -> throw SocketTimeoutException("Unrecovered") }
+        assertNull(HttpUtil.getUrlContent(UrlContentRequest(url = "https://127.0.0.1:443/api", timeout = 15_000)))
+        assertFalse(
+            HttpUtil.downloadToFile(
+                UrlContentRequest(url = "https://127.0.0.1:443/geoip.dat", timeout = 15_000),
+                tempDir.resolve("fail-io.dat").toFile()
+            )
+        )
+    }
+
+    @Test
+    fun testGetUrlContent_unicodeIdnUrlTriggersTls12FallbackAndCachesPunycodeHost() {
+        var attempts = 0
+        HttpUtil.attemptExecutor = { _, req, _ ->
+            attempts++
+            if (attempts == 1) {
+                throw SocketTimeoutException("IDN handshake stalled")
+            }
+            buildOkResponse(req, body = "idn-ok")
+        }
+
+        val result = HttpUtil.getUrlContent(
+            UrlContentRequest(url = "https://例子.测试/api", timeout = 15_000)
+        )
+        assertEquals("idn-ok", result)
+        assertEquals(2, attempts)
+        assertTrue(HttpUtil.shouldPreferTls12(HttpUtil.TlsFallbackCacheKey("xn--fsqu00a.xn--0zwm56d", 443, isProxied = false)))
     }
 }

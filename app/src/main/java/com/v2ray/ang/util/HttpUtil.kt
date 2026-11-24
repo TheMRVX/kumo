@@ -48,6 +48,12 @@ object HttpUtil {
     internal var clientBuilderFactory: () -> OkHttpClient.Builder = { OkHttpClient.Builder() }
     internal var attemptExecutor: (OkHttpClient, Request, TlsAttemptEventListener) -> Response =
         { client, request, _ -> client.newCall(request).execute() }
+    internal var warnLogger: (String, Throwable?) -> Unit = { message, error ->
+        if (error != null) LogUtil.w(AppConfig.TAG, message, error) else LogUtil.w(AppConfig.TAG, message)
+    }
+    internal var errorLogger: (String, Throwable?) -> Unit = { message, error ->
+        if (error != null) LogUtil.e(AppConfig.TAG, message, error) else LogUtil.e(AppConfig.TAG, message)
+    }
 
     private val TLS_1_2_CONNECTION_SPEC = ConnectionSpec.Builder(ConnectionSpec.MODERN_TLS)
         .tlsVersions(TlsVersion.TLS_1_2)
@@ -264,7 +270,6 @@ object HttpUtil {
         }
         try {
             return executeWithTlsFallback(
-                url = url,
                 timeoutMs = request.timeout,
                 initialCapMs = INITIAL_TLS_HANDSHAKE_CAP_MS,
                 httpPort = request.httpPort,
@@ -274,14 +279,14 @@ object HttpUtil {
                 request = requestBuilder.build()
             ) { response ->
                 if (!response.isSuccessful) {
-                    LogUtil.w(AppConfig.TAG, "Failed to get URL content, code=${response.code}")
+                    warnLogger("Failed to get URL content, code=${response.code}", null)
                     null
                 } else {
                     response.body?.string()
                 }
             }
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to get URL content", e)
+            errorLogger("Failed to get URL content", e)
         }
         return null
     }
@@ -329,6 +334,11 @@ object HttpUtil {
                 throw IOException("Unsupported URL scheme")
             }
 
+            val finalUserAgent = if (request.userAgent.isNullOrBlank()) {
+                "v2rayNG/${BuildConfig.VERSION_NAME}"
+            } else {
+                request.userAgent
+            }
             val requestBuilder = Request.Builder()
                 .url(activeUrl)
                 .get()
@@ -352,7 +362,6 @@ object HttpUtil {
             }
 
             val stepResult = executeWithTlsFallback(
-                url = activeUrl,
                 timeoutMs = request.timeout,
                 initialCapMs = INITIAL_TLS_HANDSHAKE_CAP_MS,
                 httpPort = request.httpPort,
@@ -440,7 +449,6 @@ object HttpUtil {
     }
 
     private fun <T> executeWithTlsFallback(
-        url: String,
         timeoutMs: Int,
         initialCapMs: Int,
         httpPort: Int,
@@ -450,10 +458,8 @@ object HttpUtil {
         request: Request,
         responseHandler: (Response) -> T
     ): T {
-        val parsedUri = runCatching { URI(Utils.fixIllegalUrl(url)) }.getOrNull()
-        val scheme = parsedUri?.scheme?.lowercase(Locale.ROOT)
-        val rawHost = parsedUri?.host
-        if (scheme != "https" || rawHost.isNullOrBlank()) {
+        val httpUrl = request.url
+        if (!httpUrl.isHttps) {
             val listener = TlsAttemptEventListener()
             val client = buildOkHttpClient(
                 timeout = timeoutMs,
@@ -466,8 +472,8 @@ object HttpUtil {
             return attemptExecutor(client, request, listener).use(responseHandler)
         }
 
-        val normalizedHost = toIdnDomain(rawHost.trim('[', ']')).lowercase(Locale.ROOT)
-        val effectivePort = if (parsedUri.port > 0) parsedUri.port else 443
+        val normalizedHost = httpUrl.host.lowercase(Locale.ROOT)
+        val effectivePort = httpUrl.port
         val isProxied = httpPort != 0
         val cacheKey = TlsFallbackCacheKey(normalizedHost, effectivePort, isProxied)
 
@@ -490,8 +496,7 @@ object HttpUtil {
                     throw e
                 }
                 clearTls12Preference(cacheKey)
-                LogUtil.w(
-                    AppConfig.TAG,
+                warnLogger(
                     "Cached TLS 1.2 failed for $normalizedHost:$effectivePort (proxied=$isProxied), retrying default TLS",
                     e
                 )
@@ -530,8 +535,7 @@ object HttpUtil {
             val retryTimeout = computeRetryTimeoutMs(timeoutMs, currentTimeMs() - startMs)
             val retryListener = TlsAttemptEventListener()
             if (!primaryListener.secureConnectCompleted) {
-                LogUtil.w(
-                    AppConfig.TAG,
+                warnLogger(
                     "TLS handshake stalled/failed for $normalizedHost:$effectivePort (proxied=$isProxied), retrying TLS 1.2",
                     e
                 )
@@ -550,8 +554,7 @@ object HttpUtil {
                 }
                 result
             } else {
-                LogUtil.w(
-                    AppConfig.TAG,
+                warnLogger(
                     "Pre-header timeout after TLS 1.3 handshake for $normalizedHost:$effectivePort (proxied=$isProxied), retrying default TLS",
                     e
                 )
@@ -642,7 +645,6 @@ object HttpUtil {
 
         return try {
             executeWithTlsFallback(
-                url = url,
                 timeoutMs = request.timeout,
                 initialCapMs = INITIAL_DOWNLOAD_HANDSHAKE_CAP_MS,
                 httpPort = request.httpPort,
@@ -652,7 +654,7 @@ object HttpUtil {
                 request = requestBuilder.build()
             ) { response ->
                 if (!response.isSuccessful) {
-                    LogUtil.w(AppConfig.TAG, "Failed to download file, code=${response.code}, url=$url")
+                    warnLogger("Failed to download file, code=${response.code}, url=$url", null)
                     return@executeWithTlsFallback false
                 }
                 val body = response.body ?: return@executeWithTlsFallback false
@@ -664,7 +666,7 @@ object HttpUtil {
                 true
             }
         } catch (e: Exception) {
-            LogUtil.e(AppConfig.TAG, "Failed to download file: $url", e)
+            errorLogger("Failed to download file: $url", e)
             false
         }
     }
