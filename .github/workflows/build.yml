@@ -42,7 +42,7 @@ jobs:
         elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
           RAW_TAG="${GITHUB_REF#refs/tags/}"
         else
-          RAW_TAG=$(grep 'versionName =' app/build.gradle.kts | head -1 | awk -F'"' '{print $2}')
+          RAW_TAG=$(grep 'versionName =' app/build.gradle.kts | head -1 | awk -F'"' '{print $(NF-1)}')
           [ -z "$RAW_TAG" ] && RAW_TAG="2.3.12"
         fi
         CLEAN_VERSION="${RAW_TAG#v}"
@@ -214,7 +214,7 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${GITHUB_REF#refs/tags/}"
           else
-            TAG=$(grep 'versionName =' app/build.gradle.kts 2>/dev/null | head -1 | awk -F'"' '{print $2}')
+            TAG=$(grep 'versionName =' app/build.gradle.kts 2>/dev/null | head -1 | awk -F'"' '{print $(NF-1)}')
             [ -z "$TAG" ] && TAG="2.3.12"
           fi
           CLEAN_VERSION="${TAG#v}"
